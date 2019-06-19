@@ -76,9 +76,11 @@ class Endpoint_Api {
 	 * @return string The request URI.
 	 */
 	public function build_request_uri() {
-		$request_uri  = filter_input( INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL );
+        $home_url = get_home_url(null, '', 'relative');
+		$request_uri  = str_replace($home_url, '', filter_input( INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL ));
 		$uri_parts    = wp_parse_url( $request_uri );
 		$request_path = rtrim( $uri_parts['path'], '/' );
+        $cache_key_headers = '';
 
 		if ( isset( $uri_parts['query'] ) && ! empty( $uri_parts['query'] ) ) {
 			parse_str( $uri_parts['query'], $params );
@@ -86,8 +88,23 @@ class Endpoint_Api {
 			$request_path .= '?' . http_build_query( $params );
 		}
 
+		//Add headers value to cache_key
+		if (defined('WP_REST_CACHE_KEY_HEADERS') && is_array(WP_REST_CACHE_KEY_HEADERS)) {
+		    foreach (WP_REST_CACHE_KEY_HEADERS as $key) {
+
+                $key = strtoupper(str_replace('-', '_', $key));
+                
+                if (!isset($_SERVER["HTTP_$key"])) {
+                    continue;
+                }
+
+                $val = $_SERVER["HTTP_$key"];
+                $cache_key_headers = "$cache_key_headers_$val";
+            }
+        }
+        
 		$this->request_uri = $request_path;
-		$this->cache_key   = md5( $this->request_uri );
+		$this->cache_key   = md5( $this->request_uri ) . (empty($cache_key_headers) ? '' : '_') . $cache_key_headers;
 
 		return $request_path;
 	}
@@ -157,46 +174,55 @@ class Endpoint_Api {
 		return $result;
 	}
 
+    /**
+     * Check if caching should be pre skipped.
+     *
+     * @return bool True if no caching should be applied, false if caching can be applied.
+     */
+	public function request_uri_skip_caching() {
+
+        // Make sure we only apply to allowed api calls.
+        $rest_prefix = sprintf( '/%s/', get_option( 'wp_rest_cache_rest_prefix', 'wp-json' ) );
+        if ( strpos( $this->request_uri, $rest_prefix ) === false ) {
+            return true;
+        }
+
+        $allowed_endpoints = get_option( 'wp_rest_cache_allowed_endpoints', [] );
+
+        $allowed_endpoint = false;
+        foreach ( $allowed_endpoints as $namespace => $endpoints ) {
+            foreach ( $endpoints as $endpoint ) {
+                if ( strpos( $this->request_uri, $rest_prefix . $namespace . '/' . $endpoint ) !== false ) {
+                    $allowed_endpoint = true;
+                    break 2;
+                }
+            }
+        }
+
+        if ( ! $allowed_endpoint ) {
+            return true;
+        }
+
+        // We dont skip.
+        return false;
+    }
+
 	/**
 	 * Check if caching should be skipped.
 	 *
 	 * @return bool True if no caching should be applied, false if caching can be applied.
 	 */
 	public function skip_caching() {
-		// Only cache GET-requests.
-		if ( 'GET' !== filter_input( INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_STRING ) ) {
-			return true;
-		}
 
-		// Parameter to skip caching.
-		if ( true === filter_has_var( INPUT_GET, 'skip_cache' ) ) {
-			return true;
-		}
+        // Only cache GET-requests.
+        if ( 'GET' !== filter_input( INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_STRING ) ) {
+            return true;
+        }
 
-		// Make sure we only apply to allowed api calls.
-		$rest_prefix = sprintf( '/%s/', get_option( 'wp_rest_cache_rest_prefix', 'wp-json' ) );
-		if ( strpos( $this->request_uri, $rest_prefix ) === false ) {
-			return true;
-		}
-
-		$allowed_endpoints = get_option( 'wp_rest_cache_allowed_endpoints', [] );
-
-		$allowed_endpoint = false;
-		foreach ( $allowed_endpoints as $namespace => $endpoints ) {
-			foreach ( $endpoints as $endpoint ) {
-				if ( strpos( $this->request_uri, $rest_prefix . $namespace . '/' . $endpoint ) !== false ) {
-					$allowed_endpoint = true;
-					break 2;
-				}
-			}
-		}
-
-		if ( ! $allowed_endpoint ) {
-			return true;
-		}
-
-		// We dont skip.
-		return false;
+        // Parameter to skip caching.
+        if ( true === filter_has_var( INPUT_GET, 'skip_cache' ) ) {
+            return true;
+        }
 	}
 
 	/**
@@ -204,9 +230,13 @@ class Endpoint_Api {
 	 */
 	public function get_api_cache() {
 
+        if ( $this->skip_caching() ) {
+            return;
+        }
+
 		$this->build_request_uri();
 
-		if ( $this->skip_caching() ) {
+		if ( $this->request_uri_skip_caching() ) {
 			return;
 		}
 

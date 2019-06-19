@@ -1025,12 +1025,29 @@ class Caching {
 		foreach ( $results as &$result ) {
 			if ( get_transient( $this->transient_key( $result['cache_key'] ) ) === false ) {
 				// Regenerate.
-				$url    = get_home_url() . $result['request_uri'];
+				$url = get_home_url() . $result['request_uri'];
+                $headers = array_slice(explode('_', $result['cache_key']), 1);
+
+                if (!empty($headers) && defined('WP_REST_CACHE_KEY_HEADERS') && is_array(WP_REST_CACHE_KEY_HEADERS)) {
+                    $cache_headers = WP_REST_CACHE_KEY_HEADERS;
+
+                    foreach ($headers as $index => $value) {
+
+                        if (isset($cache_headers[$index])) {
+
+                            $headers[$cache_headers[$index]] = $value;
+                        }
+                        
+                        unset($headers[$index]);
+                    }
+                }
+
 				$return = wp_remote_get(
 					$url,
 					[
 						'timeout'   => 10,
 						'sslverify' => false,
+                        'headers' => $headers,
 					]
 				);
 
