@@ -136,6 +136,7 @@ class Admin {
 	public function register_settings() {
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_timeout' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_timeout_interval' );
+        register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_header_keys' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate_interval' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate_number' );

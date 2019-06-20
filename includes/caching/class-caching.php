@@ -980,6 +980,23 @@ class Caching {
 		return get_option( 'wp_rest_cache_timeout_interval', YEAR_IN_SECONDS );
 	}
 
+    /**
+     * Get header keys for add header values to cache key.
+     *
+     * @return mixed
+     */
+    public function get_header_keys() {
+
+        if (defined('WP_REST_CACHE_HEADER_KEYS') && is_array(WP_REST_CACHE_HEADER_KEYS)) {
+            $header_keys = WP_REST_CACHE_HEADER_KEYS;
+        }
+        else {
+            $header_keys = get_option( 'wp_rest_cache_header_keys', '');
+        }
+
+        return explode(',', str_replace(' ', '', $header_keys));
+    }
+
 	/**
 	 * Should a cron be activated to regenerate the expired caches?
 	 *
@@ -1028,17 +1045,20 @@ class Caching {
 				$url = get_home_url() . $result['request_uri'];
                 $headers = array_slice(explode('_', $result['cache_key']), 1);
 
-                if (!empty($headers) && defined('WP_REST_CACHE_KEY_HEADERS') && is_array(WP_REST_CACHE_KEY_HEADERS)) {
-                    $cache_headers = WP_REST_CACHE_KEY_HEADERS;
+                if (!empty($headers)) {
 
-                    foreach ($headers as $index => $value) {
+                    $header_keys = $this->get_header_keys();
 
-                        if (isset($cache_headers[$index])) {
+                    if (!empty($header_keys)) {
+                        foreach ($headers as $index => $value) {
 
-                            $headers[$cache_headers[$index]] = $value;
+                            if (isset($header_keys[$index]) && !empty($value)) {
+
+                                $headers[$header_keys[$index]] = $value;
+                            }
+
+                            unset($headers[$index]);
                         }
-                        
-                        unset($headers[$index]);
                     }
                 }
 

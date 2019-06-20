@@ -19,6 +19,7 @@
 			<?php do_settings_sections( 'wp-rest-cache-settings' ); ?>
 			<?php $wp_rest_cache_timeout = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_timeout( false ); ?>
 			<?php $wp_rest_cache_timeout_interval = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_timeout_interval(); ?>
+            <?php $wp_rest_cache_header_keys = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_header_keys() ?>
 			<?php $wp_rest_cache_regenerate = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->should_regenerate(); ?>
 			<?php $wp_rest_cache_regenerate_interval = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_regenerate_interval(); ?>
 			<?php $wp_rest_cache_regenerate_number = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_regenerate_number(); ?>
@@ -63,6 +64,15 @@
 							id="wp_rest_cache_timeout-description"><?php esc_html_e( 'Time until expiration of cache. (Default = 1 year)', 'wp-rest-cache' ); ?></p>
 					</td>
 				</tr>
+                <tr>
+                    <th><?php esc_html_e( 'Add Request headers to cache key', 'wp-rest-cache' ); ?></th>
+                    <td>
+                        <input type="text" value="<?php echo esc_attr( implode(',', $wp_rest_cache_header_keys) ); ?>" <?php echo (defined('WP_REST_CACHE_HEADER_KEYS') ? 'readonly' : '') ?>
+                               name="wp_rest_cache_header_keys">
+                        <p class="description"
+                           id="wp_rest_cache_header_keys-description"><?php esc_html_e( 'For create separate cache request based on request headers. List separated comma header key', 'wp-rest-cache' ); ?></p>
+                    </td>
+                </tr>
 				<tr>
 					<th><?php esc_html_e( 'Enable cache regeneration', 'wp-rest-cache' ); ?></th>
 					<td>

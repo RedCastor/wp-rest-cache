@@ -70,6 +70,32 @@ class Endpoint_Api {
 		),
 	);
 
+    /**
+     * Build request cache key
+     *
+     * @return string
+     */
+    public function build_request_cache_key() {
+
+        $header_values = '';
+        $header_keys = \WP_Rest_Cache_Plugin\Includes\Caching\Caching::get_instance()->get_header_keys();
+
+        foreach ($header_keys as $key) {
+
+            $key = strtoupper(str_replace('-', '_', $key));
+            $header_key = "HTTP_{$key}";
+
+            if (!isset($_SERVER[$header_key]) || empty($_SERVER[$header_key])) {
+                continue;
+            }
+
+            $val = $_SERVER[$header_key];
+            $header_values = "{$header_values}_{$val}";
+        }
+
+        return md5( $this->request_uri ) . $header_values;
+    }
+
 	/**
 	 * Get the requested URI and create the cache key.
 	 *
@@ -80,31 +106,15 @@ class Endpoint_Api {
 		$request_uri  = str_replace($home_url, '', filter_input( INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL ));
 		$uri_parts    = wp_parse_url( $request_uri );
 		$request_path = rtrim( $uri_parts['path'], '/' );
-        $cache_key_headers = '';
 
 		if ( isset( $uri_parts['query'] ) && ! empty( $uri_parts['query'] ) ) {
 			parse_str( $uri_parts['query'], $params );
 			ksort( $params );
 			$request_path .= '?' . http_build_query( $params );
 		}
-
-		//Add headers value to cache_key
-		if (defined('WP_REST_CACHE_KEY_HEADERS') && is_array(WP_REST_CACHE_KEY_HEADERS)) {
-		    foreach (WP_REST_CACHE_KEY_HEADERS as $key) {
-
-                $key = strtoupper(str_replace('-', '_', $key));
-                
-                if (!isset($_SERVER["HTTP_$key"])) {
-                    continue;
-                }
-
-                $val = $_SERVER["HTTP_$key"];
-                $cache_key_headers = "$cache_key_headers_$val";
-            }
-        }
         
 		$this->request_uri = $request_path;
-		$this->cache_key   = md5( $this->request_uri ) . (empty($cache_key_headers) ? '' : '_') . $cache_key_headers;
+		$this->cache_key   = $this->build_request_cache_key();
 
 		return $request_path;
 	}
