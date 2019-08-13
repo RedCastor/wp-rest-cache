@@ -136,11 +136,11 @@ class Admin {
 	public function register_settings() {
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_timeout' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_timeout_interval' );
-        register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_header_keys' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate_interval' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_regenerate_number' );
 		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_memcache_used' );
+		register_setting( 'wp-rest-cache-settings', 'wp_rest_cache_global_cacheable_request_headers' );
 	}
 
 	/**
@@ -159,15 +159,27 @@ class Admin {
 	 * Add a 'Clear REST cache' button to the wp-admin top bar.
 	 */
 	public function admin_bar_item() {
-		global $wp_admin_bar;
+		/**
+		 * Show or hide the 'Clear REST cache' button in the wp-admin bar.
+		 *
+		 * Allows to hide (or show under conditions) the 'Clear REST cache button in the wp-admin bar.
+		 *
+		 * @since 2018.3.1
+		 *
+		 * @param boolean $show Boolean whether or not the 'Clear REST cache' button should be shown.
+		 */
+		$show = apply_filters( 'wp_rest_cache/display_clear_cache_button', true );
+		if ( true === $show ) {
+			global $wp_admin_bar;
 
-		$args = [
-			'id'    => 'wp-rest-cache-clear',
-			'title' => '<span class="ab-icon"></span>' . __( 'Clear REST cache', 'wp-rest-cache' ),
-			'href'  => self::empty_cache_url(),
-		];
+			$args = [
+				'id'    => 'wp-rest-cache-clear',
+				'title' => '<span class="ab-icon"></span>' . __( 'Clear REST cache', 'wp-rest-cache' ),
+				'href'  => self::empty_cache_url(),
+			];
 
-		$wp_admin_bar->add_menu( $args );
+			$wp_admin_bar->add_menu( $args );
+		}
 	}
 
 	/**

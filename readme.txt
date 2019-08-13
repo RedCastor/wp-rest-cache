@@ -126,6 +126,27 @@ add_filter( 'wp_rest_cache/determine_object_type', 'wprc_determine_object_type',
 
 Yes they can!  Go to Settings > WP REST Cache, on the Settings tab you can check `Enable cache regeneration`, this will activate a cron job which will check if there are any expired (or flushed) caches and regenerate them. Using the `Regeneration interval` you can determine how often this regeneration process should run. The `Max number regenerate caches` limits the number of regenerated caches per regeneration process, this is so your server doesn't get flooded with the regeneration calls.
 
+= Can I hide the 'Clear REST cache' in the wp-admin bar? =
+
+Yes you can! Use the hook `wp_rest_cache/display_clear_cache_button` like this:
+
+`function wprc_hide_clear_cache_button( $show ) {
+    return true;
+}
+add_filter('wp_rest_cache/display_clear_cache_button', 'wprc_hide_clear_cache_button', 10, 1);`
+
+= Can I differentiate between caches based upon request headers? =
+
+Yes you can! There are two options for this:
+1. Go to Settings > WP REST Cache and add `Global cacheable request headers`. This is a comma seperated list. These headers will be used for ALL endpoints.
+2. Use the hook `wp_rest_cache/cacheable_request_headers` to specify per endpoint which request headers should be used. Like this:
+
+`function wprc_add_cacheable_request_headers( $cacheable_headers ) {
+    $cacheable_headers['wp/v2/posts'] = 'LANG';
+    return $cacheable_headers;
+}
+add_filter('wp_rest_cache/cacheable_request_headers', 'wprc_add_cacheable_request_headers', 10, 1);`
+
 == Screenshots ==
 
 1. Settings for the WP REST Cache plugin.
@@ -135,6 +156,14 @@ Yes they can!  Go to Settings > WP REST Cache, on the Settings tab you can check
 5. Cache details page - Cache data.
 
 == Changelog ==
+
+= 2019.4.0 =
+Release Date: July 12th, 2019
+
+Feature: Added option to differentiate between caches based upon certain request headers.
+Feature: Added option to hide the 'Clear cache' button in the wp-admin bar.
+Bugfix: Fix for when WordPress is installed in a subdirectory.
+Bugfix: Remove Item Caching, it was causing more problems and complexity than it was improving performance.
 
 = 2019.3.0 =
 Release Date: June 18th, 2019

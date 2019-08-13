@@ -25,7 +25,7 @@ class Caching {
 	 *
 	 * @var string DB_VERSION The current version of the database tables.
 	 */
-	const DB_VERSION = '2018.1.1';
+	const DB_VERSION = '2019.4.0';
 
 	/**
 	 * The table name for the table where caches are stored together with their statistics.
@@ -147,12 +147,13 @@ class Caching {
 	 * @param string $type The type of cache (endpoint|item).
 	 * @param string $uri The requested uri for this cache if available.
 	 * @param string $object_type The object type for this cache if available.
+	 * @param array  $request_headers An array of cacheable request headers.
 	 */
-	public function set_cache( $cache_key, $value, $type, $uri = '', $object_type = '' ) {
+	public function set_cache( $cache_key, $value, $type, $uri = '', $object_type = '', $request_headers = [] ) {
 		set_transient( $this->transient_key( $cache_key ), $value, $this->get_timeout() );
 		switch ( $type ) {
 			case 'endpoint':
-				$this->register_endpoint_cache( $cache_key, $value, $uri );
+				$this->register_endpoint_cache( $cache_key, $value, $uri, $request_headers );
 				break;
 			case 'item':
 				$this->register_item_cache( $cache_key, $object_type, $value );
@@ -534,10 +535,11 @@ class Caching {
 	 * @param string $uri The requested URI.
 	 * @param string $object_type The object type for the cache.
 	 * @param bool   $is_single Whether it is a single item cache.
+	 * @param array  $request_headers An array of cacheable request headers.
 	 *
 	 * @return int The ID of the inserted row.
 	 */
-	private function insert_cache_row( $cache_key, $cache_type, $uri, $object_type, $is_single = true ) {
+	private function insert_cache_row( $cache_key, $cache_type, $uri, $object_type, $is_single = true, $request_headers = [] ) {
 		global $wpdb;
 
 		$expiration = self::get_timeout();
@@ -548,15 +550,16 @@ class Caching {
 		$wpdb->insert(
 			$this->db_table_caches,
 			[
-				'cache_key'   => $cache_key,
-				'cache_type'  => $cache_type,
-				'request_uri' => $uri,
-				'object_type' => $object_type,
-				'cache_hits'  => 1,
-				'is_single'   => $is_single,
-				'expiration'  => date( 'Y-m-d H:i:s', $expiration ),
+				'cache_key'       => $cache_key,
+				'cache_type'      => $cache_type,
+				'request_uri'     => $uri,
+				'request_headers' => wp_json_encode( $request_headers ),
+				'object_type'     => $object_type,
+				'cache_hits'      => 1,
+				'is_single'       => $is_single,
+				'expiration'      => date( 'Y-m-d H:i:s', $expiration ),
 			],
-			[ '%s', '%s', '%s', '%s', '%d', '%d', '%s' ]
+			[ '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s' ]
 		);
 
 		return $wpdb->insert_id;
@@ -663,8 +666,9 @@ class Caching {
 	 * @param string $cache_key The cache key.
 	 * @param mixed  $data The cached data.
 	 * @param string $uri The requested URI.
+	 * @param array  $request_headers An array of cacheable request headers.
 	 */
-	private function register_endpoint_cache( $cache_key, $data, $uri ) {
+	private function register_endpoint_cache( $cache_key, $data, $uri, $request_headers ) {
 		$cache_id = $this->get_cache_row_id( $cache_key );
 
 		/**
@@ -682,7 +686,7 @@ class Caching {
 		$object_type = apply_filters( 'wp_rest_cache/determine_object_type', $this->determine_object_type( $data ), $cache_key, $data, $uri );
 
 		if ( is_null( $cache_id ) ) {
-			$cache_id = $this->insert_cache_row( $cache_key, 'endpoint', $uri, $object_type, $this->is_single );
+			$cache_id = $this->insert_cache_row( $cache_key, 'endpoint', $uri, $object_type, $this->is_single, $request_headers );
 		} else {
 			$this->update_cache_expiration( $cache_id );
 		}
@@ -980,23 +984,6 @@ class Caching {
 		return get_option( 'wp_rest_cache_timeout_interval', YEAR_IN_SECONDS );
 	}
 
-    /**
-     * Get header keys for add header values to cache key.
-     *
-     * @return mixed
-     */
-    public function get_header_keys() {
-
-        if (defined('WP_REST_CACHE_HEADER_KEYS') && is_array(WP_REST_CACHE_HEADER_KEYS)) {
-            $header_keys = WP_REST_CACHE_HEADER_KEYS;
-        }
-        else {
-            $header_keys = get_option( 'wp_rest_cache_header_keys', '');
-        }
-
-        return explode(',', str_replace(' ', '', $header_keys));
-    }
-
 	/**
 	 * Should a cron be activated to regenerate the expired caches?
 	 *
@@ -1040,34 +1027,15 @@ class Caching {
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		$results = $wpdb->get_results( $sql, ARRAY_A );
 		foreach ( $results as &$result ) {
-			if ( get_transient( $this->transient_key( $result['cache_key'] ) ) === false ) {
+			if ( false === get_transient( $this->transient_key( $result['cache_key'] ) ) ) {
 				// Regenerate.
-				$url = get_home_url() . $result['request_uri'];
-                $headers = array_slice(explode('_', $result['cache_key']), 1);
-
-                if (!empty($headers)) {
-
-                    $header_keys = $this->get_header_keys();
-
-                    if (!empty($header_keys)) {
-                        foreach ($headers as $index => $value) {
-
-                            if (isset($header_keys[$index]) && !empty($value)) {
-
-                                $headers[$header_keys[$index]] = $value;
-                            }
-
-                            unset($headers[$index]);
-                        }
-                    }
-                }
-
+				$url    = get_home_url() . $result['request_uri'];
 				$return = wp_remote_get(
 					$url,
 					[
 						'timeout'   => 10,
 						'sslverify' => false,
-                        'headers' => $headers,
+						'headers'   => json_decode( $result['request_headers'], true ),
 					]
 				);
 
@@ -1089,6 +1057,15 @@ class Caching {
 	}
 
 	/**
+	 * Get a list of global cacheable request headers, the list is comma separated.
+	 *
+	 * @return string The list of global cacheable request headers.
+	 */
+	public function get_global_cacheable_request_headers() {
+		return get_option( 'wp_rest_cache_global_cacheable_request_headers', '' );
+	}
+
+	/**
 	 * Get the cache key for the current ID.
 	 *
 	 * @param string|int $id The ID used for the cache key.
@@ -1104,7 +1081,9 @@ class Caching {
 	 */
 	public function update_database_structure() {
 
-		if ( get_option( 'wp_rest_cache_database_version' ) !== self::DB_VERSION ) {
+		$version = get_option( 'wp_rest_cache_database_version' );
+
+		if ( self::DB_VERSION !== $version ) {
 			include_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 			$sql_caches =
@@ -1113,6 +1092,7 @@ class Caching {
                 `cache_key` VARCHAR(181) NOT NULL,
                 `cache_type` VARCHAR(10) NOT NULL,
                 `request_uri` LONGTEXT NOT NULL,
+                `request_headers` LONGTEXT NOT NULL,
                 `object_type` VARCHAR(200) NOT NULL,
                 `cache_hits` BIGINT(20) NOT NULL,
                 `is_single` TINYINT(1) NOT NULL,
@@ -1138,6 +1118,23 @@ class Caching {
 			dbDelta( $sql_relations );
 
 			update_option( 'wp_rest_cache_database_version', self::DB_VERSION );
+		}
+
+		if ( version_compare( '2019.4.0', $version, '>' ) ) {
+			$this->upgrade_2019_4_0();
+		}
+	}
+
+	/**
+	 * Delete deprecated item api caches.
+	 */
+	private function upgrade_2019_4_0() {
+		$nr_of_item_caches = $this->get_record_count( 'item' );
+		for ( $count = 0; $count * 100 < $nr_of_item_caches; $count ++ ) {
+			$item_caches = $this->get_api_data( 'item', 100, $count + 1 );
+			foreach ( $item_caches as $item_cache ) {
+				$this->delete_cache( $item_cache['cache_key'], true );
+			}
 		}
 	}
 }
